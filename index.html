@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Grocery Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Flatpickr for Date inputs -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <!-- EmailJS SDK -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar / Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>Tracker<span>Pro</span></h2>
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-target="daily-entry-view">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    Daily Entry
+                </li>
+                <li data-target="products-view">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M20 16.28a2 2 0 0 1-1.34.82l-7.38 1.48a2 2 0 0 1-.8-.03l-7.4-2A2 2 0 0 1 2 14.63V7a2 2 0 0 1 1.22-1.84l7.4-3.17a2 2 0 0 1 1.4 0l7.38 2.46A2 2 0 0 1 20 6.28v10z" />
+                        <path d="M20 6.28 10.6 10" />
+                        <path d="M2 7l8.6 3" />
+                        <path d="M10.6 21v-11" />
+                    </svg>
+                    Products
+                </li>
+                <li data-target="history-view">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 3v18h18" />
+                        <path d="m19 9-5 5-4-4-3 3" />
+                    </svg>
+                    History
+                </li>
+                <li data-target="statistics-view">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 3v18h18" />
+                        <path d="M18 17V9" />
+                        <path d="M13 17V5" />
+                        <path d="M8 17v-3" />
+                    </svg>
+                    Statistics
+                </li>
+                <li class="nav-settings" data-target="settings-view">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    Settings
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="content">
+            <!-- Header -->
+            <header>
+                <div class="header-left">
+                    <h1 id="page-title">Daily Entry</h1>
+                    <p id="page-subtitle">Record today's purchases.</p>
+                </div>
+                <div class="header-right">
+                    <div class="status-badge" id="sync-status">
+                        <span class="dot red"></span> Not Connected
+                    </div>
+                </div>
+            </header>
+
+            <!-- Views Container -->
+            <div class="views-container">
+
+                <!-- View: Daily Entry -->
+                <section id="daily-entry-view" class="view active">
+                    <div class="card header-card" style="flex-wrap: wrap; gap: 1.5rem;">
+                        <div style="display:flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; flex: 1;">
+                            <div class="input-group" style="margin-bottom: 0;">
+                                <label for="entry-date">Date</label>
+                                <div style="display:flex; gap: 0.5rem; align-items: stretch;">
+                                    <input type="date" id="entry-date" required style="margin-bottom: 0;">
+                                    <button class="btn primary" id="go-date-btn" style="padding: 0.5rem 1rem;">Go</button>
+                                </div>
+                            </div>
+                            <div class="input-group" style="margin-bottom: 0; flex: 1; min-width: 200px;">
+                                <label for="daily-search">Search Products</label>
+                                <input type="text" id="daily-search" placeholder="Search daily entry..." style="margin-bottom: 0; width: 100%;">
+                            </div>
+                        </div>
+                        <div class="total-summary" style="min-width: 150px;">
+                            <span>Today's Total:</span>
+                            <h2 id="grand-total">₹0.00</h2>
+                        </div>
+                    </div>
+
+                    <div class="card table-card">
+                        <div class="table-responsive">
+                            <table class="data-table" id="daily-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Category</th>
+                                        <th>Qty</th>
+                                        <th>Total Price (₹)</th>
+                                        <th>Rate/Unit (₹)</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="daily-entry-body">
+                                    <!-- Dynamic rows will be inserted here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+
+                </section>
+
+                <!-- View: Products -->
+                <section id="products-view" class="view">
+                    <div class="card action-card" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">
+                        <input type="text" id="product-search" placeholder="Search products..." style="flex:1; min-width:200px; margin-bottom:0;">
+                        <button class="btn primary" id="add-product-btn">+ Add Product</button>
+                    </div>
+                    <div class="card table-card">
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Category</th>
+                                        <th>Unit</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="products-list-body">
+                                    <!-- Dynamic product rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View: History -->
+                <section id="history-view" class="view">
+                    <div class="card header-card" style="flex-wrap: wrap; gap: 1.5rem;">
+                        <div style="display:flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; flex: 1;">
+                            <div class="input-group" style="margin-bottom: 0;">
+                                <label for="history-date">Select Date</label>
+                                <div style="display:flex; gap: 0.5rem; align-items: stretch;">
+                                    <input type="date" id="history-date" required style="margin-bottom: 0;">
+                                    <button class="btn primary" id="fetch-history-btn" style="padding: 0.5rem 1rem;">View</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="total-summary" style="min-width: 150px;">
+                            <span>Total Spent:</span>
+                            <h2 id="history-total">₹0.00</h2>
+                        </div>
+                    </div>
+                    <div class="card table-card">
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product Name</th>
+                                        <th>Quantity</th>
+                                        <th>Total Price</th>
+                                        <th>Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-body">
+                                    <tr><td colspan="4" style="text-align:center; color:var(--text-secondary)">Select a date and click View to load history.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View: Statistics -->
+                <section id="statistics-view" class="view">
+                    <div class="card header-card">
+                        <div style="flex: 1;">
+                            <h2 style="margin-bottom: 0.5rem;">Price Statistics</h2>
+                            <p style="color:var(--text-secondary); font-size:0.875rem;">Compare latest prices with historical highest and lowest records.</p>
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0; min-width: 250px;">
+                            <input type="text" id="stats-search" placeholder="Search product stats..." style="margin-bottom: 0;">
+                        </div>
+                    </div>
+                    <div class="card table-card">
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product Name</th>
+                                        <th>Latest Price</th>
+                                        <th>Lowest Price</th>
+                                        <th>Highest Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="statistics-body">
+                                    <!-- Dynamic stats rows -->
+                                    <tr><td colspan="4" style="text-align:center; color:var(--text-secondary)">Loading statistics...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View: Settings -->
+                <section id="settings-view" class="view">
+                    <div class="card">
+                        <h3>Configuration</h3>
+                        <p class="text-muted">Wait for Firebase and EmailJS keys before configuring.</p>
+
+                        <div class="settings-form">
+                            <h4>App Connection</h4>
+                            <p style="color:var(--text-secondary); font-size:0.875rem; margin-bottom:1rem">
+                                The app is hardcoded to sync with your Google Sheet. It caches data locally for speed.
+                            </p>
+                            <button class="btn primary" id="force-sync-btn">Force Sync & Refresh Data</button>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="product-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="product-modal-title">Add New Product</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="product-form">
+                    <input type="hidden" id="prod-id" value="">
+                    <div class="input-group">
+                        <label>Product Name</label>
+                        <input type="text" id="prod-name" required placeholder="e.g. Tomato">
+                    </div>
+                    <div class="input-group combobox">
+                        <label>Category</label>
+                        <input type="text" id="prod-category" required placeholder="Select or type a category" autocomplete="off" style="width: 100%;">
+                        <div class="combobox-dropdown" id="category-dropdown">
+                            <!-- Options populated by JS -->
+                        </div>
+                    </div>
+                    <div class="input-group combobox">
+                        <label>Unit</label>
+                        <input type="text" id="prod-unit" required placeholder="Select or type a unit" autocomplete="off" style="width: 100%;">
+                        <div class="combobox-dropdown" id="unit-dropdown">
+                            <!-- Options populated by JS -->
+                        </div>
+                    </div>
+                    <button type="submit" class="btn primary full-width">Save Product</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Action Bar (Floats on Daily Entry) -->
+    <div class="action-bar" id="global-action-bar">
+        <button class="btn primary" id="save-daily-btn">
+            <svg style="width:14px;height:14px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            Save Entry
+        </button>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Message here</div>
+
+    <!-- Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="app.js?v=3"></script>
+</body>
+
+</html>
