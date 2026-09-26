@@ -10,6 +10,9 @@ let lastPrices = {};
 let productStats = {}; // To hold the min/max/last stats
 const API_URL = 'https://script.google.com/macros/s/AKfycbyW6R_4xvbcIweewTiJ2srlryjU0mjOKetI2xwJ0Yezr5m7DKe3ncHu_-kGm-o_0vGC3Q/exec';
 let isConnected = false;
+let statsChartInstance = null;
+let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+let isSyncing = false;
 
 // DOM Elements
 const views = document.querySelectorAll('.view');
@@ -62,6 +65,19 @@ function jsonp(url) {
 // =============================================
 // Initialization
 // =============================================
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+            .then(registration => {
+                console.log('Service Worker registered with scope:', registration.scope);
+            })
+            .catch(error => {
+                console.log('Service Worker registration failed:', error);
+            });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Set date from URL or default to today
     const urlParams = new URLSearchParams(window.location.search);
@@ -146,6 +162,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (historyDateInput) {
                 fetchHistoryForDate(historyDateInput.value);
             }
+        });
+    }
+
+    // Export & Print Buttons
+    const exportCsvBtn = document.getElementById('export-csv-btn');
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', () => {
+            exportHistoryToCSV();
+        });
+    }
+    const printHistoryBtn = document.getElementById('print-history-btn');
+    if (printHistoryBtn) {
+        printHistoryBtn.addEventListener('click', () => {
+            printHistory();
         });
     }
 
@@ -241,10 +271,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Daily Entry Save
     document.getElementById('save-daily-btn').addEventListener('click', async (e) => {
-        if(!API_URL || !isConnected) {
-            return showToast('Connect to Google Sheets first (Settings tab).', 'error');
-        }
-        
         const qtyInputs = document.querySelectorAll('.qty-input');
         const items = [];
         let hasData = false;
@@ -267,16 +293,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if(!hasData) return showToast('Please enter at least one quantity and total price.', 'error');
 
+        const payload = {
+            date: document.getElementById('entry-date').value,
+            items: items,
+            timestamp: Date.now()
+        };
+
         const btn = e.currentTarget;
         const originalText = btn.textContent;
+
+        if (!API_URL || !isConnected || !navigator.onLine) {
+            // Offline Save
+            offlineQueue.push(payload);
+            localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+
+            showToast('Saved offline. Will sync when connected.', 'info');
+            document.querySelectorAll('.qty-input, .total-input').forEach(i => i.value = '');
+            updateGrandTotal();
+
+            // Update UI to show unsynced items
+            syncStatus.innerHTML = `<span class="dot" style="background:#f59e0b"></span> Unsynced (${offlineQueue.length})`;
+            return;
+        }
+
         btn.textContent = 'Saving to Cloud...';
         btn.disabled = true;
 
         try {
-            const payload = {
-                date: document.getElementById('entry-date').value,
-                items: items
-            };
             const dataStr = encodeURIComponent(JSON.stringify(payload));
             const result = await jsonp(API_URL + '?action=save_purchases&data=' + dataStr);
             
@@ -292,11 +335,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Refresh last prices from sheet
                 fetchDataFromSheet(); 
             } else {
-                showToast('Error: ' + (result.error || 'Unknown'), 'error');
+                throw new Error(result.error || 'Unknown API error');
             }
         } catch (error) {
             console.error('Save error:', error);
-            showToast('Failed to save data. Check connection.', 'error');
+            // Fallback to queue on API failure
+            offlineQueue.push(payload);
+            localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+            showToast('Network error. Saved offline.', 'info');
+            syncStatus.innerHTML = `<span class="dot" style="background:#f59e0b"></span> Unsynced (${offlineQueue.length})`;
+            document.querySelectorAll('.qty-input, .total-input').forEach(i => i.value = '');
+            updateGrandTotal();
         } finally {
             btn.textContent = originalText;
             btn.disabled = false;
@@ -340,6 +389,46 @@ document.addEventListener('DOMContentLoaded', () => {
         syncStatus.innerHTML = '<span class="dot" style="background:#f59e0b"></span> Offline Mode';
     }
 
+    // Offline / Online Event Listeners
+    window.addEventListener('online', () => {
+        showToast('Back online! Syncing data...', 'info');
+        checkConnection().then(syncOfflineData);
+    });
+    window.addEventListener('offline', () => {
+        isConnected = false;
+        syncStatus.innerHTML = '<span class="dot" style="background:#f59e0b"></span> Offline Mode';
+        showToast('You are offline. Data will be saved locally.', 'info');
+    });
+
+    // Theme Toggle Logic
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    const themeText = document.getElementById('theme-text');
+    const currentTheme = localStorage.getItem('theme');
+
+    if (currentTheme === 'light') {
+        document.body.classList.add('light-mode');
+        themeText.textContent = 'Dark Mode';
+    }
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            document.body.classList.toggle('light-mode');
+            let theme = 'dark';
+            if (document.body.classList.contains('light-mode')) {
+                theme = 'light';
+                themeText.textContent = 'Dark Mode';
+            } else {
+                themeText.textContent = 'Light Mode';
+            }
+            localStorage.setItem('theme', theme);
+
+            // Re-render chart if it exists to update colors
+            if (statsChartInstance) {
+                renderStatisticsList(document.getElementById('stats-search') ? document.getElementById('stats-search').value.toLowerCase() : '');
+            }
+        });
+    }
+
 });
 
 // =============================================
@@ -377,12 +466,24 @@ function switchView(viewId) {
 }
 
 async function checkConnection() {
+    if (!navigator.onLine) {
+        isConnected = false;
+        syncStatus.innerHTML = '<span class="dot" style="background:#f59e0b"></span> Offline Mode';
+        return;
+    }
+
     syncStatus.innerHTML = '<span class="dot" style="background:var(--accent-color)"></span> Connecting...';
     try {
         await fetchDataFromSheet();
         isConnected = true;
-        syncStatus.innerHTML = '<span class="dot green"></span> Connected to Google Sheets';
-        showToast('Connected to Google Sheets!', 'success');
+
+        if (offlineQueue.length > 0) {
+            syncStatus.innerHTML = `<span class="dot" style="background:#f59e0b"></span> Unsynced (${offlineQueue.length})`;
+            syncOfflineData();
+        } else {
+            syncStatus.innerHTML = '<span class="dot green"></span> Connected to Google Sheets';
+        }
+
     } catch (e) {
         isConnected = false;
         syncStatus.innerHTML = '<span class="dot" style="background:#f59e0b"></span> Connection Failed';
@@ -391,6 +492,49 @@ async function checkConnection() {
         console.error('API URL:', API_URL);
         showToast('Connection failed: ' + e.message, 'error');
     }
+}
+
+async function syncOfflineData() {
+    if (offlineQueue.length === 0 || !isConnected || !API_URL || isSyncing) return;
+
+    isSyncing = true;
+    showToast(`Syncing ${offlineQueue.length} entries to cloud...`, 'info');
+    let hasError = false;
+
+    // Work on a copy of the queue
+    const queueToProcess = [...offlineQueue];
+
+    for (let i = 0; i < queueToProcess.length; i++) {
+        const payload = queueToProcess[i];
+        try {
+            const dataStr = encodeURIComponent(JSON.stringify(payload));
+            const result = await jsonp(API_URL + '?action=save_purchases&data=' + dataStr);
+
+            if (result.success) {
+                // Remove synced item from original queue
+                offlineQueue = offlineQueue.filter(item => item.timestamp !== payload.timestamp);
+                localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+            } else {
+                hasError = true;
+                console.error('Sync failed for an item:', result.error);
+            }
+        } catch (error) {
+            hasError = true;
+            console.error('Network error during sync:', error);
+            // Stop processing if network fails
+            break;
+        }
+    }
+
+    if (hasError) {
+        showToast('Sync partially failed. Will retry later.', 'error');
+        syncStatus.innerHTML = `<span class="dot" style="background:#f59e0b"></span> Unsynced (${offlineQueue.length})`;
+    } else if (offlineQueue.length === 0) {
+        showToast('All offline data synced successfully!', 'success');
+        syncStatus.innerHTML = '<span class="dot green"></span> Connected to Google Sheets';
+        fetchDataFromSheet(); // Refresh stats
+    }
+    isSyncing = false;
 }
 
 async function fetchDataFromSheet() {
@@ -675,6 +819,10 @@ function renderStatisticsList(searchTerm = '') {
     
     if (statKeys.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-secondary)">No purchase data available yet.</td></tr>';
+        if (statsChartInstance) {
+            statsChartInstance.destroy();
+            statsChartInstance = null;
+        }
         return;
     }
 
@@ -683,6 +831,11 @@ function renderStatisticsList(searchTerm = '') {
         return stats.name.toLowerCase().includes(searchTerm);
     });
     
+    const chartLabels = [];
+    const chartMinPrices = [];
+    const chartMaxPrices = [];
+    const chartLastPrices = [];
+
     filteredKeys.forEach(id => {
         const stats = productStats[id];
         const tr = document.createElement('tr');
@@ -694,6 +847,80 @@ function renderStatisticsList(searchTerm = '') {
             <td style="color:var(--danger-color)"><strong>₹${stats.maxPrice}</strong> <br><small style="color:var(--text-secondary)">(${formatDateToDDMMYYYY(stats.maxDate)})</small></td>
         `;
         tbody.appendChild(tr);
+
+        // Prepare data for chart
+        chartLabels.push(stats.name);
+        chartMinPrices.push(stats.minPrice);
+        chartMaxPrices.push(stats.maxPrice);
+        chartLastPrices.push(stats.lastPrice);
+    });
+
+    renderChart(chartLabels, chartMinPrices, chartMaxPrices, chartLastPrices);
+}
+
+function renderChart(labels, minPrices, maxPrices, lastPrices) {
+    const canvas = document.getElementById('statsChart');
+    if (!canvas) return;
+
+    if (statsChartInstance) {
+        statsChartInstance.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+
+    // Check if it is light mode for chart text color
+    const isLightMode = document.body.classList.contains('light-mode');
+    const textColor = isLightMode ? '#1e293b' : '#f8fafc';
+    const gridColor = isLightMode ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)';
+
+    statsChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Lowest Price',
+                    data: minPrices,
+                    backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                    borderColor: 'rgb(16, 185, 129)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Latest Price',
+                    data: lastPrices,
+                    backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                    borderColor: 'rgb(59, 130, 246)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Highest Price',
+                    data: maxPrices,
+                    backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                    borderColor: 'rgb(239, 68, 68)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
+                },
+                x: {
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: textColor }
+                }
+            }
+        }
     });
 }
 
@@ -755,6 +982,61 @@ function updateGrandTotal() {
         grand += parseFloat(input.value) || 0;
     });
     document.getElementById('grand-total').textContent = '₹' + grand.toFixed(2);
+}
+
+function exportHistoryToCSV() {
+    const tbody = document.getElementById('history-body');
+    if (!tbody || tbody.innerText.includes('Loading') || tbody.innerText.includes('No purchases') || tbody.innerText.includes('Select a date')) {
+        return showToast('No data to export.', 'info');
+    }
+
+    const rows = tbody.querySelectorAll('tr');
+    const csvContent = [];
+
+    // Add headers
+    csvContent.push("Product Name,Quantity,Total Price (₹),Rate (₹)");
+
+    rows.forEach(row => {
+        const cols = row.querySelectorAll('td');
+        if (cols.length === 4) {
+            const name = cols[0].innerText.replace(/,/g, ''); // Remove commas to avoid CSV issues
+            const qty = cols[1].innerText;
+            const total = cols[2].innerText.replace('₹', '').replace(/,/g, '');
+            const rate = cols[3].innerText.replace('₹', '').replace(/,/g, '');
+            csvContent.push(`${name},${qty},${total},${rate}`);
+        }
+    });
+
+    const dateStr = document.getElementById('history-date').value || new Date().toISOString().split('T')[0];
+    const totalSpent = document.getElementById('history-total').innerText.replace('₹', '').replace(/,/g, '');
+    csvContent.push(`,,Total Spent,${totalSpent}`);
+
+    const blob = new Blob([csvContent.join("\n")], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `grocery_history_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function printHistory() {
+    const tbody = document.getElementById('history-body');
+
+    if (!tbody || tbody.innerText.includes('Loading') || tbody.innerText.includes('No purchases') || tbody.innerText.includes('Select a date')) {
+        return showToast('No data to print.', 'info');
+    }
+
+    // Set page title for print output
+    const dateStr = document.getElementById('history-date').value || new Date().toISOString().split('T')[0];
+    const originalTitle = document.title;
+    document.title = `Grocery_Purchase_History_${dateStr}`;
+
+    window.print();
+
+    // Restore title
+    document.title = originalTitle;
 }
 
 function showToast(message, type = 'success') {

@@ -12,6 +12,37 @@
     --glass-border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+body.light-mode {
+    --bg-color: #f1f5f9;
+    --card-bg: rgba(255, 255, 255, 0.8);
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border-color: rgba(0, 0, 0, 0.1);
+    --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    --glass-border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+body.light-mode .sidebar {
+    background: rgba(248, 250, 252, 0.9);
+}
+
+body.light-mode input, body.light-mode select {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid var(--border-color);
+}
+
+body.light-mode .data-table td input {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+body.light-mode .combobox-dropdown {
+    background: #ffffff;
+}
+
+body.light-mode .action-bar .btn {
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -707,5 +738,69 @@ input:focus, select:focus {
     }
     .header-left h1 {
         font-size: 1.25rem;
+    }
+}
+
+/* =============================================
+   PRINT MEDIA QUERY
+   ============================================= */
+@media print {
+    body {
+        background: white !important;
+        color: black !important;
+    }
+
+    .sidebar,
+    header,
+    .action-bar,
+    .modal-overlay,
+    .toast,
+    #export-csv-btn,
+    #print-history-btn,
+    .header-card .input-group,
+    #history-view > .header-card > div:first-child {
+        display: none !important;
+    }
+
+    .content {
+        padding: 0 !important;
+        overflow: visible !important;
+    }
+
+    .card {
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: transparent !important;
+    }
+
+    .view {
+        display: none !important;
+    }
+
+    #history-view {
+        display: block !important;
+    }
+
+    #history-view .header-card {
+        display: block !important;
+        margin-bottom: 20px !important;
+        border-bottom: 2px solid black !important;
+        padding-bottom: 10px !important;
+    }
+
+    #history-view .total-summary {
+        text-align: left !important;
+        margin-top: 10px;
+    }
+
+    .data-table th, .data-table td {
+        border-bottom: 1px solid #ccc !important;
+        color: black !important;
+    }
+
+    .data-table th {
+        font-weight: bold;
     }
 }
