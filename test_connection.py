@@ -2,7 +2,7 @@ import urllib.request
 import json
 
 # Your Google Apps Script Web App URL
-API_URL = "https://script.google.com/macros/s/AKfycbxwTFHNFzMQvNrf58H1ewtfQf8MoiE2yaqyUNHnRaK35RejxD7vxuR4E_URbZ2-5MVwmA/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbyW6R_4xvbcIweewTiJ2srlryjU0mjOKetI2xwJ0Yezr5m7DKe3ncHu_-kGm-o_0vGC3Q/exec"
 
 print("=" * 50)
 print("Google Apps Script Connection Test")
